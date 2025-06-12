@@ -1,0 +1,580 @@
+openapi: 3.0.3
+info:
+  title: 🔐 모가코 인증 API
+  description: |
+    # 모가코 인증 API
+
+    이 API는 JWT 토큰, 이메일/비밀번호 인증 및 Google OAuth 통합을 사용한 인증 서비스를 제공합니다.
+
+    ## 기능
+    - 📧 이메일/비밀번호 등록 및 로그인
+    - 🔍 Google OAuth 로그인
+    - 🔑 JWT 토큰 관리 (액세스 및 리프레시 토큰)
+    - 👤 사용자 프로필 관리
+    - 🚪 안전한 로그아웃
+    - 🔒 비밀번호 검증 및 해싱
+
+    ## 인증 방법
+
+    ### 이메일/비밀번호 인증
+    1. 이메일, 비밀번호 및 닉네임으로 등록
+    2. 이메일과 비밀번호로 로그인
+    3. 액세스 토큰(15분) 및 리프레시 토큰(30일) 수신
+
+    ### Google OAuth 인증
+    1. Google ID 토큰으로 로그인
+    2. 액세스 토큰(15분) 및 리프레시 토큰(30일) 수신
+
+    ## 일반 흐름
+    1. 인증된 엔드포인트에 액세스 토큰 사용
+    2. 액세스 토큰이 만료되면 토큰 새로 고침
+
+  version: 1.0.0
+  contact:
+    name: 모가코 API 지원
+    email: support@mogako.com
+    url: https://mogako.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://27.35.65.209:18080/
+    description: 🌐 서버
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: 📧 이메일/비밀번호로 회원가입
+      description: |
+        이메일과 비밀번호를 사용하여 새 사용자 계정을 등록합니다.
+
+        **요구사항:**
+        - 이메일은 고유하고 유효한 형식이어야 합니다
+        - 비밀번호는 대문자, 소문자, 숫자를 포함하여 최소 8자 이상이어야 합니다
+        - 사용자 프로필을 위한 닉네임이 필요합니다
+
+        **반환:** 성공적인 등록 시 JWT 토큰 및 사용자 프로필
+      operationId: registerWithEmail
+      tags:
+        - 📧 이메일 인증
+      security: []
+      requestBody:
+        required: true
+        description: 사용자 등록 정보
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              validRegistration:
+                summary: 유효한 등록 요청
+                value:
+                  email: "user@example.com"
+                  password: "SecurePass123"
+                  nickname: "홍길동"
+      responses:
+        '201':
+          description: ✅ 성공적으로 등록됨 - JWT 토큰 및 사용자 정보 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: ❌ 잘못된 요청 또는 이메일이 이미 존재함
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emailExists:
+                  summary: 이메일이 이미 등록됨
+                  value:
+                    error: "이메일이 이미 존재하거나 비밀번호가 잘못되었습니다"
+                invalidPassword:
+                  summary: 비밀번호 유효성 검사 실패
+                  value:
+                    error: "이메일이 이미 존재하거나 비밀번호가 잘못되었습니다"
+
+  /auth/login/email:
+    post:
+      summary: 📧 이메일/비밀번호로 로그인
+      description: |
+        이메일 및 비밀번호 자격 증명을 사용하여 사용자를 인증합니다.
+
+        **요구사항:**
+        - 유효한 이메일 및 비밀번호 조합
+        - 계정이 EMAIL 인증 제공자로 등록되어 있어야 함
+
+        **반환:** 성공적인 인증 시 JWT 토큰 및 사용자 프로필
+      operationId: loginWithEmail
+      tags:
+        - 📧 이메일 인증
+      security: []
+      requestBody:
+        required: true
+        description: 이메일 및 비밀번호 자격 증명
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLoginRequest'
+            examples:
+              validLogin:
+                summary: 유효한 이메일 로그인
+                value:
+                  email: "user@example.com"
+                  password: "SecurePass123"
+      responses:
+        '200':
+          description: ✅ 성공적으로 인증됨 - JWT 토큰 및 사용자 정보 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: ❌ 잘못된 이메일 또는 비밀번호
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: 잘못된 이메일 또는 비밀번호
+                  value:
+                    error: "잘못된 이메일 또는 비밀번호"
+        '400':
+          description: ❌ 잘못된 요청 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login/google:
+    post:
+      summary: 🔓 Google OAuth 로그인
+      description: |
+        Google OAuth ID 토큰을 사용하여 사용자를 인증하고 JWT 토큰을 반환합니다.
+
+        **단계:**
+        1. Google OAuth에서 Google ID 토큰 가져오기
+        2. 이 엔드포인트에 토큰 전송
+        3. 액세스 토큰 및 리프레시 토큰 수신
+
+        **참고:** 이것은 인증이 필요하지 않은 유일한 엔드포인트입니다.
+      operationId: loginWithGoogle
+      tags:
+        - 🔐 인증
+      security: []
+      requestBody:
+        required: true
+        description: Google OAuth에서 얻은 Google ID 토큰
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+            examples:
+              validLogin:
+                summary: 유효한 Google ID 토큰
+                description: 유효한 Google OAuth ID 토큰의 예
+                value:
+                  googleIdToken: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2NzAyNzM..."
+      responses:
+        '200':
+          description: ✅ 성공적으로 인증됨 - JWT 토큰 및 사용자 정보 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                successfulLogin:
+                  summary: 성공적인 로그인 응답
+                  value:
+                    accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    user:
+                      id: 1
+                      email: "john.doe@example.com"
+                      nickname: "홍길동"
+                      profileImageUrl: "https://lh3.googleusercontent.com/..."
+        '400':
+          description: ❌ 잘못된 요청 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFormat:
+                  summary: 누락되거나 잘못된 필드
+                  value:
+                    error: "잘못된 요청 형식"
+        '401':
+          description: ❌ 잘못된 Google ID 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidToken:
+                  summary: 잘못된 Google 토큰
+                  value:
+                    error: "잘못된 Google ID 토큰"
+
+  /auth/refresh:
+    post:
+      summary: 🔄 액세스 토큰 갱신
+      description: |
+        리프레시 토큰을 사용하여 새 액세스 토큰을 가져옵니다.
+
+        **사용 시기:**
+        - 액세스 토큰이 만료될 때 (15분)
+        - 재로그인 없이 사용자 세션을 유지하기 위해
+
+        **응답:** 새 액세스 토큰 및 리프레시 토큰 반환
+      operationId: refreshToken
+      tags:
+        - 🔐 인증
+      security: []
+      requestBody:
+        required: true
+        description: 새 액세스 토큰을 생성하기 위한 리프레시 토큰
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+            examples:
+              validRefresh:
+                summary: 유효한 리프레시 토큰
+                value:
+                  refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: ✅ 토큰이 성공적으로 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+              examples:
+                successfulRefresh:
+                  summary: 새 토큰 생성됨
+                  value:
+                    accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_token"
+                    refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_refresh"
+        '400':
+          description: ❌ 잘못된 요청 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: ❌ 잘못되거나 만료된 리프레시 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidRefreshToken:
+                  summary: 만료된 리프레시 토큰
+                  value:
+                    error: "잘못된 리프레시 토큰"
+
+  /auth/logout:
+    post:
+      summary: 🚪 사용자 로그아웃
+      description: |
+        리프레시 토큰을 무효화하고 사용자를 안전하게 로그아웃합니다.
+
+        **요구사항:**
+        - Authorization 헤더에 유효한 JWT 액세스 토큰
+        - 요청 본문에 리프레시 토큰
+
+        **결과:** 서버에서 리프레시 토큰이 무효화됩니다
+      operationId: logoutUser
+      tags:
+        - 🔐 인증
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: 무효화할 리프레시 토큰
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+            examples:
+              logoutRequest:
+                summary: 리프레시 토큰으로 로그아웃
+                value:
+                  refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: ✅ 성공적으로 로그아웃됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              examples:
+                successfulLogout:
+                  summary: 로그아웃 성공
+                  value:
+                    message: "성공적으로 로그아웃됨"
+        '400':
+          description: ❌ 잘못된 요청 형식 또는 리프레시 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingToken:
+                  summary: Authorization 헤더 누락
+                  value:
+                    error: "액세스 토큰 누락"
+                invalidToken:
+                  summary: 잘못된 JWT 토큰
+                  value:
+                    error: "잘못된 액세스 토큰"
+
+  /auth/me:
+    get:
+      summary: 👤 현재 사용자 정보 가져오기
+      description: |
+        인증된 사용자의 프로필 정보를 가져옵니다.
+
+        **요구사항:**
+        - Authorization 헤더에 유효한 JWT 액세스 토큰
+
+        **반환:** ID, 이메일, 닉네임 및 프로필 이미지를 포함한 현재 사용자의 프로필 데이터
+      operationId: getCurrentUser
+      tags:
+        - 👤 사용자 프로필
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ✅ 사용자 정보가 성공적으로 검색됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              examples:
+                userProfile:
+                  summary: 사용자 프로필 데이터
+                  value:
+                    id: 1
+                    email: "john.doe@example.com"
+                    nickname: "홍길동"
+                    profileImageUrl: "https://lh3.googleusercontent.com/a/AGNmyxZ..."
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 액세스 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidAccessToken:
+                  summary: 잘못된 액세스 토큰
+                  value:
+                    error: "잘못된 액세스 토큰"
+                missingAccessToken:
+                  summary: Authorization 헤더 누락
+                  value:
+                    error: "액세스 토큰 누락"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        로그인 엔드포인트에서 얻은 JWT 액세스 토큰.
+
+        **형식:** `Authorization: Bearer <token>`
+
+        **토큰 수명:** 15분
+
+        **획득 방법:** `/auth/login/email` 또는 `/auth/login/google` 엔드포인트 사용
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - nickname
+      properties:
+        email:
+          type: string
+          format: email
+          description: 사용자의 이메일 주소 (고유해야 함)
+          example: "user@example.com"
+        password:
+          type: string
+          minLength: 8
+          description: 대문자, 소문자 및 숫자가 포함된 비밀번호
+          example: "SecurePass123"
+        nickname:
+          type: string
+          maxLength: 100
+          description: 사용자의 표시 이름
+          example: "홍길동"
+
+    EmailLoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: 사용자의 등록된 이메일 주소
+          example: "user@example.com"
+        password:
+          type: string
+          description: 사용자의 비밀번호
+          example: "SecurePass123"
+
+    GoogleLoginRequest:
+      type: object
+      required:
+        - googleIdToken
+      properties:
+        googleIdToken:
+          type: string
+          description: Google OAuth ID 토큰
+          example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT 액세스 토큰 (15분 후 만료)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: 리프레시 토큰 (30일 후 만료)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: 유효한 리프레시 토큰
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: 새 JWT 액세스 토큰 (15분 후 만료)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: 새 리프레시 토큰 (30일 후 만료)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 사용자의 고유 식별자
+          example: 1
+        email:
+          type: string
+          format: email
+          description: 사용자의 이메일 주소
+          example: "user@example.com"
+        nickname:
+          type: string
+          description: 사용자의 표시 이름
+          example: "홍길동"
+        profileImageUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: 사용자 프로필 이미지의 URL
+          example: "https://lh3.googleusercontent.com/..."
+        authProvider:
+          type: string
+          enum: [EMAIL, GOOGLE]
+          description: 계정 생성에 사용된 인증 방법
+          example: "EMAIL"
+        emailVerified:
+          type: boolean
+          description: 사용자의 이메일이 확인되었는지 여부
+          example: false
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 오류 메시지
+          example: "잘못된 Google ID 토큰"
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: 성공 메시지
+          example: "성공적으로 로그아웃됨"
+
+tags:
+  - name: 📧 이메일 인증
+    description: |
+      등록 및 로그인을 위한 이메일/비밀번호 인증 엔드포인트.
+
+      **엔드포인트:**
+      - `POST /auth/register` - 이메일/비밀번호로 새 계정 등록
+      - `POST /auth/login/email` - 이메일/비밀번호로 로그인
+
+      **비밀번호 요구사항:**
+      - 최소 8자 이상
+      - 대문자 포함
+      - 소문자 포함
+      - 최소 하나의 숫자 포함
+
+  - name: 🔍 Google 인증
+    description: |
+      Google OAuth 인증 엔드포인트.
+
+      **엔드포인트:**
+      - `POST /auth/login/google` - Google OAuth ID 토큰으로 로그인
+
+      **요구사항:**
+      - 클라이언트 측 OAuth 흐름에서 유효한 Google OAuth ID 토큰
+
+  - name: 🔐 토큰 관리
+    description: |
+      리프레시 및 로그아웃을 위한 JWT 토큰 관리 엔드포인트.
+
+      **엔드포인트:**
+      - `POST /auth/refresh` - 리프레시 토큰을 사용하여 액세스 토큰 갱신
+      - `POST /auth/logout` - 안전한 로그아웃 및 리프레시 토큰 무효화
+
+  - name: 👤 사용자 프로필
+    description: |
+      사용자 프로필 관리 엔드포인트.
+
+      **엔드포인트:**
+      - `GET /auth/me` - 현재 사용자 정보 가져오기
+
+      **참고:** 모든 엔드포인트는 유효한 JWT 인증이 필요합니다.

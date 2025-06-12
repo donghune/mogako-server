@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: mogako-postgres
+    environment:
+      POSTGRES_DB: mogako
+      POSTGRES_USER: mogako
+      POSTGRES_PASSWORD: mogako123
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mogako-network
+
+  auth-api:
+    image: reona7140/auth-api
+    container_name: mogako-auth-api
+    environment:
+      - JWT_SECRET=your-secret-key-here
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/mogako_auth
+      - DATABASE_USER=mogako
+      - DATABASE_PASSWORD=mogako123
+    ports:
+      - "18080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - mogako-network
+
+  calendar-api:
+    image: reona7140/calendar-api
+    container_name: mogako-calendar-api
+    environment:
+      - JWT_SECRET=your-secret-key-here
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/mogako_calendar
+      - DATABASE_USER=mogako
+      - DATABASE_PASSWORD=mogako123
+    ports:
+      - "18081:8081"
+    depends_on:
+      - postgres
+    networks:
+      - mogako-network
+
+volumes:
+  postgres_data:
+
+networks:
+  mogako-network:
+    driver: bridge

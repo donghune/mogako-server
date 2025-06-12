@@ -1,0 +1,546 @@
+openapi: 3.0.3
+info:
+  title: 📅 모가코 캘린더 API
+  description: |
+    # 모가코를 위한 캘린더 API
+
+    이 API는 개인 기분 추적 및 캘린더 항목 관리 기능을 제공합니다.
+
+    ## 기능
+    - 📝 캘린더 항목 생성, 읽기, 업데이트, 삭제
+    - 😄 기분 추적 (행복, 슬픔, 화남)
+    - 📅 날짜 기반 필터링
+    - 🔒 사용자별 데이터 격리
+    - 🔑 JWT 인증 필요
+
+    ## 인증
+    모든 엔드포인트는 auth-api에서 유효한 JWT 액세스 토큰이 필요합니다.
+    Authorization 헤더에 토큰을 포함하세요: `Bearer <token>`
+
+  version: 1.0.0
+  contact:
+    name: 모가코 API 지원
+    email: support@mogako.com
+    url: https://mogako.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://27.35.65.209:18080/
+    description: 🌐 서버
+
+security:
+  - bearerAuth: []
+
+paths:
+  /calendar:
+    get:
+      summary: 📋 캘린더 항목 가져오기
+      description: |
+        선택적 날짜 필터링을 통해 사용자의 캘린더 항목을 검색합니다.
+
+        **쿼리 매개변수:**
+        - `date` (선택사항): YYYY-MM-DD 형식의 특정 날짜로 필터링
+
+        **반환:** 인증된 사용자의 캘린더 항목 목록
+      operationId: getCalendarEntries
+      tags:
+        - 📅 캘린더 관리
+      parameters:
+        - name: date
+          in: query
+          description: 특정 날짜로 항목 필터링 (YYYY-MM-DD 형식)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-01-15"
+      responses:
+        '200':
+          description: ✅ 캘린더 항목이 성공적으로 검색됨
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarEntryResponse'
+              examples:
+                multipleEntries:
+                  summary: 여러 캘린더 항목
+                  value:
+                    - id: 1
+                      date: "2024-01-15"
+                      summary: "직장에서 좋은 하루"
+                      content: "생산적인 회의를 하고 프로젝트 마일스톤을 완료했습니다."
+                      mood: "HAPPY"
+                      createdAt: "2024-01-15T09:30:00"
+                      updatedAt: "2024-01-15T09:30:00"
+                    - id: 2
+                      date: "2024-01-16"
+                      summary: "스트레스가 많은 하루"
+                      content: "마감일이 너무 많고 시간이 부족합니다."
+                      mood: "SAD"
+                      createdAt: "2024-01-16T18:45:00"
+                      updatedAt: "2024-01-16T18:45:00"
+                singleEntry:
+                  summary: 단일 캘린더 항목 (날짜 필터 사용)
+                  value:
+                    - id: 1
+                      date: "2024-01-15"
+                      summary: "직장에서 좋은 하루"
+                      content: "생산적인 회의를 하고 프로젝트 마일스톤을 완료했습니다."
+                      mood: "HAPPY"
+                      createdAt: "2024-01-15T09:30:00"
+                      updatedAt: "2024-01-15T09:30:00"
+        '400':
+          description: ❌ 잘못된 날짜 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidDate:
+                  summary: 잘못된 날짜 형식
+                  value:
+                    error: "잘못된 날짜 형식입니다. YYYY-MM-DD 형식을 사용하세요"
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: ➕ 캘린더 항목 생성
+      description: |
+        인증된 사용자를 위한 새 캘린더 항목을 생성합니다.
+
+        **요구사항:**
+        - 유효한 JWT 액세스 토큰
+        - 날짜, 요약, 내용 및 기분이 필요함
+
+        **반환:** 생성된 ID와 타임스탬프가 있는 생성된 캘린더 항목
+      operationId: createCalendarEntry
+      tags:
+        - 📅 캘린더 관리
+      requestBody:
+        required: true
+        description: 생성할 캘린더 항목 데이터
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCalendarEntryRequest'
+            examples:
+              happyEntry:
+                summary: 행복한 기분 항목
+                value:
+                  date: "2024-01-15"
+                  summary: "생산적인 하루"
+                  content: "모든 작업을 완료하고 산책할 시간도 있었습니다."
+                  mood: "HAPPY"
+              sadEntry:
+                summary: 슬픈 기분 항목
+                value:
+                  date: "2024-01-16"
+                  summary: "어려운 하루"
+                  content: "직장에서 몇 가지 어려움이 있었고 부담감을 느꼈습니다."
+                  mood: "SAD"
+              angryEntry:
+                summary: 화난 기분 항목
+                value:
+                  date: "2024-01-17"
+                  summary: "답답한 회의"
+                  content: "회의가 잘 진행되지 않았고 결정이 불공정했습니다."
+                  mood: "ANGRY"
+      responses:
+        '201':
+          description: ✅ 캘린더 항목이 성공적으로 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarEntryResponse'
+              examples:
+                createdEntry:
+                  summary: 성공적으로 생성된 항목
+                  value:
+                    id: 3
+                    date: "2024-01-15"
+                    summary: "생산적인 하루"
+                    content: "모든 작업을 완료하고 산책할 시간도 있었습니다."
+                    mood: "HAPPY"
+                    createdAt: "2024-01-15T14:30:00"
+                    updatedAt: "2024-01-15T14:30:00"
+        '400':
+          description: ❌ 잘못된 요청 형식
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFormat:
+                  summary: 필수 필드 누락
+                  value:
+                    error: "잘못된 요청 형식"
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /calendar/{id}:
+    get:
+      summary: 📖 특정 캘린더 항목 가져오기
+      description: |
+        ID로 특정 캘린더 항목을 검색합니다.
+
+        **요구사항:**
+        - 유효한 JWT 액세스 토큰
+        - 항목이 인증된 사용자에게 속해야 함
+
+        **반환:** 찾았고 접근 가능한 경우 캘린더 항목 세부 정보
+      operationId: getCalendarEntry
+      tags:
+        - 📅 캘린더 관리
+      parameters:
+        - name: id
+          in: path
+          description: 캘린더 항목 ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: ✅ 캘린더 항목이 성공적으로 검색됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarEntryResponse'
+              examples:
+                entryDetail:
+                  summary: 캘린더 항목 세부 정보
+                  value:
+                    id: 1
+                    date: "2024-01-15"
+                    summary: "직장에서 좋은 하루"
+                    content: "생산적인 회의를 하고 프로젝트 마일스톤을 완료했습니다."
+                    mood: "HAPPY"
+                    createdAt: "2024-01-15T09:30:00"
+                    updatedAt: "2024-01-15T09:30:00"
+        '400':
+          description: ❌ 잘못된 항목 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  summary: 잘못된 ID 형식
+                  value:
+                    error: "잘못된 항목 ID"
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: ❌ 캘린더 항목을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: 항목을 찾을 수 없음
+                  value:
+                    error: "캘린더 항목을 찾을 수 없음"
+
+    put:
+      summary: ✏️ 캘린더 항목 업데이트
+      description: |
+        기존 캘린더 항목을 업데이트합니다.
+
+        **요구사항:**
+        - 유효한 JWT 액세스 토큰
+        - 항목이 인증된 사용자에게 속해야 함
+        - 최소한 하나의 필드(요약, 내용 또는 기분)가 제공되어야 함
+
+        **반환:** 새 타임스탬프가 있는 업데이트된 캘린더 항목
+      operationId: updateCalendarEntry
+      tags:
+        - 📅 캘린더 관리
+      parameters:
+        - name: id
+          in: path
+          description: 업데이트할 캘린더 항목 ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        description: 업데이트할 필드(모두 선택 사항이지만 최소한 하나는 필요)
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCalendarEntryRequest'
+            examples:
+              updateSummary:
+                summary: 요약만 업데이트
+                value:
+                  summary: "업데이트된 요약"
+              updateMood:
+                summary: 기분을 SAD에서 HAPPY로 업데이트
+                value:
+                  mood: "HAPPY"
+              updateAll:
+                summary: 모든 필드 업데이트
+                value:
+                  summary: "훨씬 더 좋은 하루"
+                  content: "아침 이후 상황이 크게 개선되었습니다."
+                  mood: "HAPPY"
+      responses:
+        '200':
+          description: ✅ 캘린더 항목이 성공적으로 업데이트됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarEntryResponse'
+              examples:
+                updatedEntry:
+                  summary: 성공적으로 업데이트된 항목
+                  value:
+                    id: 1
+                    date: "2024-01-15"
+                    summary: "훨씬 더 좋은 하루"
+                    content: "아침 이후 상황이 크게 개선되었습니다."
+                    mood: "HAPPY"
+                    createdAt: "2024-01-15T09:30:00"
+                    updatedAt: "2024-01-15T16:45:00"
+        '400':
+          description: ❌ 잘못된 요청 형식 또는 항목 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: ❌ 캘린더 항목을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: 항목을 찾을 수 없음
+                  value:
+                    error: "캘린더 항목을 찾을 수 없음"
+
+    delete:
+      summary: 🗑️ 캘린더 항목 삭제
+      description: |
+        캘린더 항목을 영구적으로 삭제합니다.
+
+        **요구사항:**
+        - 유효한 JWT 액세스 토큰
+        - 항목이 인증된 사용자에게 속해야 함
+
+        **경고:** 이 작업은 취소할 수 없습니다!
+      operationId: deleteCalendarEntry
+      tags:
+        - 📅 캘린더 관리
+      parameters:
+        - name: id
+          in: path
+          description: 삭제할 캘린더 항목 ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: ✅ 캘린더 항목이 성공적으로 삭제됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              examples:
+                deletedEntry:
+                  summary: 성공적으로 삭제됨
+                  value:
+                    message: "캘린더 항목이 성공적으로 삭제되었습니다"
+        '400':
+          description: ❌ 잘못된 항목 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  summary: 잘못된 ID 형식
+                  value:
+                    error: "잘못된 항목 ID"
+        '401':
+          description: ❌ 인증되지 않음 - 잘못되거나 누락된 JWT 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: ❌ 캘린더 항목을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: 항목을 찾을 수 없거나 접근할 수 없음
+                  value:
+                    error: "캘린더 항목을 찾을 수 없음"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        auth-api 로그인 엔드포인트에서 얻은 JWT 액세스 토큰.
+
+        **형식:** `Authorization: Bearer <token>`
+
+        **토큰 수명:** 15분
+
+        **획득 방법:** Google ID 토큰으로 auth-api `/auth/login` 엔드포인트 사용
+
+  schemas:
+    CalendarEntryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 고유한 캘린더 항목 식별자
+          example: 1
+        date:
+          type: string
+          format: date
+          description: YYYY-MM-DD 형식의 항목 날짜
+          example: "2024-01-15"
+        summary:
+          type: string
+          description: 하루에 대한 간략한 요약 (최대 200자)
+          example: "직장에서 좋은 하루"
+        content:
+          type: string
+          description: 하루에 대한 자세한 내용
+          example: "생산적인 회의를 하고 프로젝트 마일스톤을 완료했습니다."
+        mood:
+          $ref: '#/components/schemas/Mood'
+        createdAt:
+          type: string
+          format: date-time
+          description: 항목이 생성된 시간
+          example: "2024-01-15T09:30:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 항목이 마지막으로 업데이트된 시간
+          example: "2024-01-15T09:30:00"
+
+    CreateCalendarEntryRequest:
+      type: object
+      required:
+        - date
+        - summary
+        - content
+        - mood
+      properties:
+        date:
+          type: string
+          format: date
+          description: YYYY-MM-DD 형식의 항목 날짜
+          example: "2024-01-15"
+        summary:
+          type: string
+          maxLength: 200
+          description: 하루에 대한 간략한 요약
+          example: "생산적인 하루"
+        content:
+          type: string
+          description: 하루에 대한 자세한 내용
+          example: "모든 작업을 완료하고 산책할 시간도 있었습니다."
+        mood:
+          $ref: '#/components/schemas/Mood'
+
+    UpdateCalendarEntryRequest:
+      type: object
+      description: 최소한 하나의 필드가 제공되어야 함
+      properties:
+        summary:
+          type: string
+          maxLength: 200
+          description: 업데이트된 요약 (선택 사항)
+          example: "훨씬 더 좋은 하루"
+        content:
+          type: string
+          description: 업데이트된 내용 (선택 사항)
+          example: "아침 이후 상황이 크게 개선되었습니다."
+        mood:
+          $ref: '#/components/schemas/Mood'
+
+    Mood:
+      type: string
+      enum:
+        - HAPPY
+        - SAD
+        - ANGRY
+      description: |
+        하루의 기분:
+        - `HAPPY` 😄 - 긍정적이고 즐거운 기분
+        - `SAD` 😢 - 우울하고 슬픈 기분  
+        - `ANGRY` 😠 - 좌절하고 화난 기분
+      example: "HAPPY"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 오류 메시지
+          example: "캘린더 항목을 찾을 수 없음"
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: 성공 메시지
+          example: "캘린더 항목이 성공적으로 삭제되었습니다"
+
+tags:
+  - name: 📅 캘린더 관리
+    description: |
+      기분 추적 기능이 있는 개인 캘린더 항목에 대한 완전한 CRUD 작업.
+
+      **기능:**
+      - 날짜, 요약 및 자세한 내용이 포함된 일일 기분 항목 생성
+      - 특정 날짜별로 항목 필터링
+      - 기존 항목 업데이트 (요약, 내용, 기분)
+      - 원치 않는 항목 삭제
+      - 사용자 격리 - 자신의 항목만 접근 가능
+
+      **기분 추적:**
+      세 가지 기분 옵션으로 일일 감정 상태를 추적합니다:
+      - 😄 HAPPY - 긍정적이고 즐거운 날
+      - 😢 SAD - 우울하고 슬픈 날
+      - 😠 ANGRY - 좌절하고 화난 날
+
+      **참고:** 모든 엔드포인트는 auth-api의 유효한 JWT 인증이 필요합니다.
